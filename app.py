@@ -25,6 +25,15 @@ timeframe = st.sidebar.selectbox(
 )
 
 df = yf.download(user_input,start=start,end=end)
+
+df = yf.download(user_input, start=start, end=end)
+
+# Check if data exists
+if df.empty:
+    st.error("No stock data found. Please check the ticker symbol.")
+    st.stop()
+
+df.columns = df.columns.get_level_values(0)
 df.columns = df.columns.get_level_values(0)
 
 
@@ -219,4 +228,5 @@ else:
 st.subheader("Latest Market Data")
 
 st.write(df.tail())
+
 
