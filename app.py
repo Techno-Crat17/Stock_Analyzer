@@ -2,7 +2,9 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import yfinance as yf
-from tensorflow.keras.models import load_model
+from keras.models import load_model
+
+
 import streamlit as st
 import plotly.graph_objects as go
 
@@ -138,7 +140,9 @@ for i in range(100, data_training_array.shape[0]):
 
 x_train, y_train = np.array(x_train), np.array(y_train)
 
-model=load_model('keras_model.keras')
+model = load_model("keras_model.keras")
+
+model.save("model_fixed.keras")
 past_100_days=data_training.tail(100)
 final_df = pd.concat([past_100_days, data_testing], ignore_index=True)
 input_data = scaler.fit_transform(final_df)
@@ -228,5 +232,6 @@ else:
 st.subheader("Latest Market Data")
 
 st.write(df.tail())
+
 
 
