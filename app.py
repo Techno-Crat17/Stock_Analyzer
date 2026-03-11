@@ -3,18 +3,17 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import yfinance as yf
 from keras.models import load_model
-
-
 import streamlit as st
 import plotly.graph_objects as go
+import os
 
 start = '2010-01-01'
 end = '2025-12-31'
 
-st.title('Stock Trend Prediction')
+st.title('📈 Stock Trend Prediction App')
 
 # -------------------------
-# Sidebar Search
+# Sidebar
 # -------------------------
 
 st.sidebar.header("Stock Search")
@@ -26,21 +25,25 @@ timeframe = st.sidebar.selectbox(
     ["1 Month","6 Months","1 Year","5 Years","Max"]
 )
 
-df = yf.download(user_input,start=start,end=end)
+# -------------------------
+# Load Stock Data
+# -------------------------
 
-df = yf.download(user_input, start=start, end=end)
+@st.cache_data
+def load_data(ticker):
+    return yf.download(ticker, start=start, end=end)
 
-# Check if data exists
+df = load_data(user_input)
+
 if df.empty:
-    st.error("No stock data found. Please check the ticker symbol.")
+    st.error("No stock data found. Please check ticker symbol.")
     st.stop()
 
+# Fix multi-index columns
 df.columns = df.columns.get_level_values(0)
-df.columns = df.columns.get_level_values(0)
-
 
 # -------------------------
-# Timeframe Filtering
+# Timeframe Filter
 # -------------------------
 
 if timeframe == "1 Month":
@@ -63,7 +66,7 @@ else:
 # Candlestick Chart
 # -------------------------
 
-st.subheader("Candlestick Chart")
+st.subheader("📊 Candlestick Chart")
 
 fig_candle = go.Figure(data=[go.Candlestick(
     x=df_chart.index,
@@ -81,45 +84,52 @@ fig_candle.update_layout(
 
 st.plotly_chart(fig_candle)
 
-
 # -------------------------
-# Original Code Continues
+# Dataset Description
 # -------------------------
 
-st.subheader('Data from 2010 - 2025')
+st.subheader('Data Summary')
 st.write(df.describe())
 
+# -------------------------
+# Closing Price Chart
+# -------------------------
 
-st.subheader('Closing Price vs Time chart')
+st.subheader('Closing Price vs Time')
 
 fig = plt.figure(figsize=(12,6))
 plt.plot(df['Close'])
+plt.xlabel("Date")
+plt.ylabel("Price")
+plt.title("Closing Price")
 
 st.pyplot(fig)
 
+# -------------------------
+# Moving Average Chart
+# -------------------------
 
-
-# Closing Price vs Time chart with 100MA & 200MA
-
-st.subheader('Closing Price vs Time chart with 100MA & 200MA')
+st.subheader('Closing Price with 100MA & 200MA')
 
 ma100 = df.Close.rolling(100).mean()
 ma200 = df.Close.rolling(200).mean()
 
 fig = plt.figure(figsize=(12,6))
 
-plt.plot(ma100, 'r')
-plt.plot(ma200, 'g')
-plt.plot(df.Close, 'b')
+plt.plot(df.Close,label="Close Price")
+plt.plot(ma100,'r',label="100 MA")
+plt.plot(ma200,'g',label="200 MA")
+
+plt.legend()
 
 st.pyplot(fig)
 
-
-# Splitting Data into Training and Testing
+# -------------------------
+# Train Test Split
+# -------------------------
 
 data_training = pd.DataFrame(df['Close'][0:int(len(df)*0.70)])
-data_testing = pd.DataFrame(df['Close'][int(len(df)*0.70):int(len(df))])
-
+data_testing = pd.DataFrame(df['Close'][int(len(df)*0.70):])
 
 from sklearn.preprocessing import MinMaxScaler
 
@@ -127,26 +137,40 @@ scaler = MinMaxScaler(feature_range=(0,1))
 
 data_training_array = scaler.fit_transform(data_training)
 
-
-# Splitting Data into x_train and y_train
+# -------------------------
+# Prepare Training Data
+# -------------------------
 
 x_train = []
 y_train = []
 
 for i in range(100, data_training_array.shape[0]):
-    
     x_train.append(data_training_array[i-100:i])
     y_train.append(data_training_array[i,0])
 
 x_train, y_train = np.array(x_train), np.array(y_train)
 
-model = load_model("keras_model.keras", compile=False)
+# -------------------------
+# Load Model
+# -------------------------
 
+model_path = "keras_model.keras"
 
-past_100_days=data_training.tail(100)
+if not os.path.exists(model_path):
+    st.error("Model file 'keras_model.keras' not found!")
+    st.stop()
+
+model = load_model(model_path, compile=False)
+
+# -------------------------
+# Testing Data
+# -------------------------
+
+past_100_days = data_training.tail(100)
+
 final_df = pd.concat([past_100_days, data_testing], ignore_index=True)
-input_data = scaler.fit_transform(final_df)
 
+input_data = scaler.fit_transform(final_df)
 
 x_test=[]
 y_test=[]
@@ -156,15 +180,22 @@ for i in range(100,input_data.shape[0]):
     y_test.append(input_data[i,0])
 
 x_test,y_test=np.array(x_test),np.array(y_test)
+
 y_predicted=model.predict(x_test)
 
-scaler.scale_
+# -------------------------
+# Inverse Scaling
+# -------------------------
 
 y_predicted = scaler.inverse_transform(y_predicted.reshape(-1,1))
 y_test = scaler.inverse_transform(y_test.reshape(-1,1))
 
+# -------------------------
+# Prediction vs Original
+# -------------------------
 
-st.subheader('Prediction Vs Original')
+st.subheader('Prediction vs Original Price')
+
 fig2 = plt.figure(figsize=(10,6))
 
 plt.plot(y_test, label="Original Price")
@@ -176,20 +207,18 @@ plt.legend()
 
 st.pyplot(fig2)
 
-
 # ===============================
-# Feature 1: Next Day Prediction
+# Next Day Prediction
 # ===============================
 
-st.subheader("Next Day Predicted Price")
+st.subheader("🔮 Next Day Predicted Price")
 
 next_price = y_predicted[-1][0]
 
 st.write(f"Predicted Next Price: ${next_price:.2f}")
 
-
 # ===============================
-# Feature 2: Prediction Accuracy
+# Prediction Accuracy
 # ===============================
 
 st.subheader("Model Prediction Accuracy")
@@ -199,12 +228,10 @@ error = np.mean(np.abs(y_test - y_predicted))
 accuracy = max(0, 100 - error)
 
 st.write(f"Average Prediction Error: {error:.2f}")
-
 st.write(f"Prediction Accuracy Score: {accuracy:.2f}%")
 
-
 # ===============================
-# Feature 3: Stock Risk Indicator
+# Stock Risk Indicator
 # ===============================
 
 st.subheader("Stock Risk Indicator")
@@ -224,15 +251,12 @@ elif volatility < 0.4:
 else:
     st.error("High Risk Stock")
 
-
 # ===============================
-# Feature 4: Latest Market Data
+# Latest Data
 # ===============================
 
 st.subheader("Latest Market Data")
 
 st.write(df.tail())
-
-
 
 
